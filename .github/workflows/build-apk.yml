@@ -1,0 +1,64 @@
+name: Gerar APK
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Montar pasta www
+        run: |
+          mkdir -p www/assets
+          cp index.html www/
+          cp icon-512.png www/assets/
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Instalar dependências
+        run: npm install
+
+      - name: Criar projeto Android
+        run: npx cap add android
+
+      - name: Ajustar ícone e orientação
+        run: bash patch-android.sh
+
+      - name: Sincronizar arquivos web
+        run: npx cap sync android
+
+      - name: Compilar APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Renomear APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk english-quest.apk
+
+      - name: Enviar APK (artefato)
+        uses: actions/upload-artifact@v4
+        with:
+          name: english-quest-apk
+          path: english-quest.apk
+
+      - name: Publicar em Releases (somente em tags v*)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: english-quest.apk
